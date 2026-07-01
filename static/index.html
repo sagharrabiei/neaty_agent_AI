@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neaty Agent — Premium File Organizer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <div class="ambient-glow cyan"></div>
+    <div class="ambient-glow purple"></div>
+
+    <div class="app-container">
+        <!-- HEADER -->
+        <header class="app-header">
+            <div class="header-logo">
+                <div class="logo-icon">✨</div>
+                <div class="logo-text">
+                    <h1>Neaty Agent</h1>
+                    <p class="subtitle">ADK 2.0 Graph-Based File Organization</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button id="btn-show-config" class="secondary-btn">
+                    <span class="icon">⚙️</span> Settings
+                </button>
+            </div>
+        </header>
+
+        <!-- MAIN LAYOUT -->
+        <main class="main-layout">
+            <!-- LEFT PANEL: CONTROLS & SCAN -->
+            <section class="control-panel glass-card">
+                <div class="panel-header">
+                    <h2>📁 Organize Local Directory</h2>
+                    <p>Enter a local directory path to let Neaty scan and structure it.</p>
+                </div>
+
+                <div class="input-group">
+                    <label for="input-source-dir">Source Directory Path</label>
+                    <div class="path-input-container">
+                        <input type="text" id="input-source-dir" placeholder="C:\Users\Username\Desktop\folder_to_organize" value="C:\Users\SAGHAR\Desktop\for_organize">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="input-dest-dir">Destination Directory (Optional)</label>
+                    <input type="text" id="input-dest-dir" placeholder="Defaults to 'organized_output' inside source folder">
+                </div>
+
+                <div class="action-buttons">
+                    <button id="btn-scan" class="primary-btn cyan-glow">
+                        <span class="btn-spinner hidden" id="scan-spinner"></span>
+                        <span class="icon">🔍</span> Scan Folder
+                    </button>
+                    <button id="btn-organize" class="primary-btn purple-glow disabled" disabled>
+                        <span class="btn-spinner hidden" id="organize-spinner"></span>
+                        <span class="icon">🚀</span> Organize Files
+                    </button>
+                </div>
+
+                <div class="status-box hidden" id="status-card">
+                    <div class="status-indicator"></div>
+                    <div class="status-content">
+                        <h4 id="status-title">Ready</h4>
+                        <p id="status-desc">Click Scan Folder to inspect the directory.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- RIGHT PANEL: PREVIEW & RESULT REPORTS -->
+            <section class="display-panel glass-card" id="display-section">
+                <div class="tab-header">
+                    <button class="tab-btn active" id="tab-btn-preview">🔍 Scanned Files</button>
+                    <button class="tab-btn disabled" id="tab-btn-report" disabled>📋 Organization Report</button>
+                </div>
+
+                <div class="tab-content active" id="tab-preview-content">
+                    <div class="empty-state" id="preview-empty">
+                        <div class="empty-icon">📁</div>
+                        <h3>No Folder Scanned Yet</h3>
+                        <p>Enter a directory path on the left and scan it to preview files and summaries before organizing.</p>
+                    </div>
+
+                    <div class="preview-container hidden" id="preview-container">
+                        <div class="scan-summary-bar">
+                            <span class="summary-badge cyan-badge" id="badge-file-count">0 Files</span>
+                            <span class="summary-badge path-badge" id="badge-source-path">C:\Users...</span>
+                        </div>
+                        <div class="table-scroller">
+                            <table class="preview-table">
+                                <thead>
+                                    <tr>
+                                        <th>Filename</th>
+                                        <th>Extension</th>
+                                        <th>Size</th>
+                                        <th>Snippet Preview</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="files-table-body">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tab-report-content">
+                    <div class="empty-state" id="report-empty">
+                        <div class="empty-icon">📋</div>
+                        <h3>No Report Available</h3>
+                        <p>Once you click "Organize Files", the ADK Gemini agent will group the files, move them, and create an organization summary here.</p>
+                    </div>
+                    <div class="report-container hidden" id="report-container">
+                        <div class="report-header">
+                            <h3>✨ Organization Complete</h3>
+                            <button id="btn-view-folder" class="flat-btn">Open Output Folder</button>
+                        </div>
+                        <div class="report-body markdown-styled" id="report-md-body">
+                            <!-- Dynamic Report Markdown converted to HTML -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- SETTINGS DIALOG MODAL -->
+    <div class="modal-backdrop hidden" id="config-modal">
+        <div class="modal-content glass-card animate-zoom">
+            <div class="modal-header">
+                <h3>⚙️ Agent Configuration Settings</h3>
+                <button class="close-btn" id="btn-close-config">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-intro">Easily toggle between Google AI Studio (API Key) and Google Cloud Vertex AI (Project ID) and setup your regional SOCKS proxy.</p>
+                
+                <div class="tabs-sub">
+                    <button class="subtab-btn active" id="subtab-btn-gcp">Vertex AI (Google Cloud)</button>
+                    <button class="subtab-btn" id="subtab-btn-api">Gemini API (AI Studio)</button>
+                    <button class="subtab-btn" id="subtab-btn-proxy">Proxy Config (Network Bypass)</button>
+                </div>
+
+                <!-- GCP Vertex Section -->
+                <div class="subtab-content active" id="subtab-gcp-content">
+                    <div class="config-input-row">
+                        <div class="input-group">
+                            <label for="cfg-use-enterprise">Enable Vertex AI Platform (GOOGLE_GENAI_USE_ENTERPRISE)</label>
+                            <select id="cfg-use-enterprise">
+                                <option value="TRUE">TRUE (Use Vertex AI / GCP Project)</option>
+                                <option value="">FALSE (Use AI Studio API Key)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="config-input-row">
+                        <div class="input-group">
+                            <label for="cfg-project-id">GCP Project ID</label>
+                            <input type="text" id="cfg-project-id" placeholder="e.g. annular-aria-499706-f1">
+                        </div>
+                    </div>
+                    <div class="config-input-row">
+                        <div class="input-group">
+                            <label for="cfg-location">GCP Region Location</label>
+                            <input type="text" id="cfg-location" placeholder="e.g. us-central1, europe-west3">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API Key Section -->
+                <div class="subtab-content" id="subtab-api-content">
+                    <div class="config-input-row">
+                        <div class="input-group">
+                            <label for="cfg-gemini-key">Gemini API Key (GEMINI_API_KEY)</label>
+                            <input type="password" id="cfg-gemini-key" placeholder="AI Studio Key (e.g. AIzaSy...)">
+                        </div>
+                    </div>
+                    <div class="config-input-row">
+                        <div class="input-group">
+                            <label for="cfg-google-key">Google API Key (GOOGLE_API_KEY)</label>
+                            <input type="password" id="cfg-google-key" placeholder="Google API Key">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Proxy Section -->
+                <div class="subtab-content" id="subtab-proxy-content">
+                    <p class="section-help">Required to bypass connection drops or geographical blocks in the +03:30 timezone.</p>
+                    <div class="config-input-row">
+                        <div class="input-group">
+                            <label for="cfg-http-proxy">HTTP Proxy</label>
+                            <input type="text" id="cfg-http-proxy" placeholder="e.g. http://127.0.0.1:10809 (Nekoray) or http://127.0.0.1:7890 (Clash)">
+                        </div>
+                    </div>
+                    <div class="config-input-row">
+                        <div class="input-group">
+                            <label for="cfg-https-proxy">HTTPS Proxy</label>
+                            <input type="text" id="cfg-https-proxy" placeholder="e.g. http://127.0.0.1:10809 or http://127.0.0.1:7890">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary-btn" id="btn-cancel-config">Cancel</button>
+                <button class="primary-btn purple-glow" id="btn-save-config">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
