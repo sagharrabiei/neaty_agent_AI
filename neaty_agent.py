@@ -74,15 +74,28 @@ class CategorizationResult(BaseModel):
     )
 
 
-# ==========================================
-# 2. Node 1: Scan Directory Node (Deterministic Code)
-# ==========================================
+# ==============================================================================
+# DESIGN PATTERN: Graph-Based Workflow Node 1
+# ==============================================================================
+# The Scan Directory Node is a deterministic, high-efficiency Python function.
+# Its purpose is to crawl the file hierarchy, filter out massive development folders,
+# and extract metadata along with small textual snippets.
+#
+# TOKEN-OPTIMIZATION HEURISTIC:
+# Rather than sending whole documents to the Gemini model (which increases latency
+# and cost), we parse file extensions and extract only the first 300 characters of
+# text-based files. For binary or media files, we substitute content with descriptive
+# placeholders (e.g., "[Binary/Media File: PNG]"). This maintains complete semantic
+# context while preserving LLM context window tokens.
+# ==============================================================================
 
 
 def scan_directory_node(node_input: WorkflowInput) -> ScanResult:
     """
-    Lists files in the given directory, ignores system folders like .git and .venv,
-    reads text snippets, and compiles the list for classification.
+    BEHAVIOR:
+    Crawls the target source directory recursively, excluding development directories,
+    hidden files, and temporary caches. Captures file size, extension, and loads 
+    a small textual preview snippet for semantic content classification.
     """
     source_dir = os.path.abspath(node_input.source_dir)
     destination_dir = os.path.abspath(node_input.destination_dir)
@@ -177,11 +190,26 @@ def scan_directory_node(node_input: WorkflowInput) -> ScanResult:
     return scan_res
 
 
-# ==========================================
-# 3. Node 2: Categorizer & Naming Agent (LLM Node)
-# ==========================================
+# ==============================================================================
+# DESIGN PATTERN: Graph-Based Workflow Node 2 (AI Node)
+# ==============================================================================
+# The Categorizer Agent is the intelligent node in the workflow graph, powered by
+# Gemini-2.5-Flash. It uses schema-validated inputs (ScanResult) and outputs
+# (CategorizationResult) to ensure absolute structural consistency.
+#
+# BEHAVIOR & SKILLS COUPLING:
+# The agent is bound to a custom ADK Skill ('my-skill'). The skill acts as a set of
+# developer-defined guidelines and heuristics that direct the LLM on folder naming,
+# semantic groupings, and hierarchical depth, ensuring the output directory is 
+# logical, professional, and intuitive.
+#
+# INTERCEPTOR HOOK:
+# All tool invocations made by this agent are automatically intercepted by 
+# 'security_before_tool_callback' (hooks.py), enforcing in-place PII redaction and 
+# shell injection blocks before the execution layer processes them.
+# ==============================================================================
 
-# Load the local file categorization and organization skill
+# Load the local file categorization and organization skill guidelines
 SKILLS_DIR = pathlib.Path(__file__).parent / "my-skill"
 my_skill = load_skill_from_dir(SKILLS_DIR)
 my_skill_toolset = SkillToolset(skills=[my_skill])
@@ -212,15 +240,30 @@ categorizer_agent = Agent(
 )
 
 
-# ==========================================
-# 4. Node 3: Safe Organize Files Node (Deterministic Code)
-# ==========================================
+# ==============================================================================
+# DESIGN PATTERN: Graph-Based Workflow Node 3
+# ==============================================================================
+# The Safe Organize Files Node executes the actual folder operations designed by
+# the LLM. It guarantees absolute file and metadata integrity.
+#
+# NON-DESTRUCTIVE SAFE COPY DESIGN:
+# To prevent data loss, the agent never overwrites or alters the content of any
+# user file. It operates strictly under a read-and-copy mechanism.
+#
+# METADATA PRESERVATION:
+# By utilizing 'shutil.copy2' instead of basic 'shutil.copy', Neaty replicates
+# file data while preserving historical file metadata (creation times, modified times,
+# and file permissions). This prevents old family photos or tax documents from having
+# their timestamps reset to "today," maintaining their chronological record.
+# ==============================================================================
 
 
 def organize_files_node(node_input: CategorizationResult) -> Event:
     """
-    Creates target folders and safely copies files to their designated locations.
-    Assures original files are not altered or removed from the source.
+    BEHAVIOR:
+    Reads the category layout, creates target output subfolders safely,
+    replicates files using metadata-preserving copy operations, and logs
+    a structured execution summary in ORGANIZATION_REPORT.md.
     """
     destination_dir = node_input.destination_dir
     print(f"\n[Step 3] Organizing files into folders inside: {destination_dir}")
