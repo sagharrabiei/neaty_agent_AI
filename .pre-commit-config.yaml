@@ -1,0 +1,20 @@
+# Pre-commit configuration for Neaty
+# See https://pre-commit.com for instructions
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  # Semgrep static analysis security scanning hook
+  - repo: https://github.com/returntocorp/semgrep
+    rev: v1.65.0
+    hooks:
+      - id: semgrep
+        # Use our local rules.yaml to check python files, and fail on findings
+        args: ['--config', 'rules.yaml', '--error', '--verbose']
+        types: [python]

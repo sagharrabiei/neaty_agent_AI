@@ -1,0 +1,19 @@
+services:
+  neaty:
+    build: .
+    container_name: neaty-agent
+    ports:
+      - "5050:5050"
+    environment:
+      - GOOGLE_GENAI_USE_ENTERPRISE=TRUE
+      - GOOGLE_CLOUD_PROJECT=annular-aria-499706-f1
+      - GOOGLE_CLOUD_LOCATION=us-central1
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-key.json
+      - HOST=0.0.0.0
+      - PORT=5050
+    volumes:
+      # Mount the user's home directory to '/data' inside the container.
+      # This allows Neaty to access all files in Downloads, Desktop, Documents, etc.
+      - ~:/data
+      - ./secrets/gcp-key.json:/secrets/gcp-key.json:ro
+    restart: unless-stopped

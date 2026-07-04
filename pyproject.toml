@@ -6,6 +6,9 @@ dependencies = [
     "google-adk>=2.3.0",
     "python-dotenv",
     "pydantic",
+    "google-cloud-pubsub>=2.13.0",
+    "google-cloud-aiplatform[agent_engines]",
+    "google-cloud-logging",
 ]
 
 [project.optional-dependencies]

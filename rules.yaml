@@ -1,0 +1,40 @@
+rules:
+  - id: prevent-subprocess-and-shell-execution
+    pattern-either:
+      - pattern: os.system(...)
+      - pattern: os.popen(...)
+      - pattern: subprocess.run(...)
+      - pattern: subprocess.Popen(...)
+      - pattern: subprocess.call(...)
+      - pattern: subprocess.check_call(...)
+      - pattern: subprocess.check_output(...)
+      - pattern: exec(...)
+      - pattern: eval(...)
+    message: "🚨 [SECURITY ERROR] Destructive shell execution or dynamic evaluation detected! Agents must NOT run subprocesses, shell commands, or eval/exec logic to ensure runtime safety."
+    languages: [python]
+    severity: ERROR
+
+  - id: detect-hardcoded-secrets
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $KEY = "AIza..."
+          - pattern: |
+              $KEY = "sk-..."
+          - pattern: |
+              $KEY = "gemini_..."
+      - pattern-not:
+          - pattern: |
+              $KEY = os.getenv(...)
+    message: "🔑 [SECURITY WARNING] Possible hardcoded API key or private credentials detected! Always load secrets using dotenv and os.getenv."
+    languages: [python]
+    severity: ERROR
+
+  - id: prevent-unsafe-file-deletion
+    pattern-either:
+      - pattern: os.remove(...)
+      - pattern: os.unlink(...)
+      - pattern: shutil.rmtree(...)
+    message: "⚠️ [SECURITY WARNING] Direct file/folder deletion is flagged. Double-check that this is safe and does not delete user data. Neaty should safely move files instead of deleting them."
+    languages: [python]
+    severity: ERROR

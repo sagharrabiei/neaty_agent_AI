@@ -1,0 +1,33 @@
+# .gcloudignore
+# This file specifies files and directories to be ignored by gcloud builds submit and other gcloud commands.
+
+# Git metadata
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Virtual environment and python cache
+.venv/
+env/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Cache directories
+.pytest_cache/
+.ruff_cache/
+.adk/
+
+# Secrets and environment configurations
+.env
+secrets/
+
+# Large local testing directories
+data/
+
+# Temporary directories
+tmp/
+C:/Users/SAGHAR/Desktop/neaty/data/

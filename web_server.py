@@ -1,8 +1,9 @@
 import os
 import sys
 from typing import Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -12,10 +13,22 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 # Load environment variables
 load_dotenv()
 
-from neaty_agent import app as adk_app, WorkflowInput, InMemoryRunner  # noqa: E402
+from neaty_agent import WorkflowInput  # noqa: E402
 
 # Create FastAPI app
 app = FastAPI(title="Neaty File Organizer API", version="2.0")
+
+
+@app.on_event("startup")
+async def startup_event():
+    import asyncio
+    from pubsub_manager import pubsub_manager
+
+    # Initialize the pubsub_manager with current running event loop
+    loop = asyncio.get_running_loop()
+    await pubsub_manager.initialize(loop=loop)
+    # Start background subscriber/worker
+    await pubsub_manager.start_worker()
 
 
 # Request schemas
@@ -122,7 +135,7 @@ def scan_directory(req: ScanRequest):
         raise HTTPException(status_code=400, detail="Source directory does not exist.")
 
     # Import the internal scanning function directly to perform the scan
-    from neaty_agent import scan_directory_node, WorkflowInput
+    from neaty_agent import scan_directory_node
 
     try:
         # Default destination_dir inside source_dir for the mock schema
@@ -159,37 +172,161 @@ async def organize_directory(req: OrganizeRequest):
     # Ensure proxy variables from current env are set correctly
     load_dotenv(override=True)
 
-    runner = InMemoryRunner(app=adk_app)
-    workflow_input = WorkflowInput(
-        source_dir=source_dir, destination_dir=destination_dir
-    )
+    import uuid
+    import asyncio
+    from pubsub_manager import pubsub_manager, pending_tasks, task_results
+
+    # Generate a unique task ID
+    task_id = str(uuid.uuid4())
+
+    # Create an event to await completion
+    event = asyncio.Event()
+    pending_tasks[task_id] = event
 
     try:
-        # Run ADK agent workflow in async mode
-        result = await runner.run_debug(workflow_input.model_dump_json())
+        # Publish task details to the Pub/Sub manager
+        await pubsub_manager.publish(task_id, source_dir, destination_dir)
 
-        # Locate the saved report
-        report_path = os.path.join(destination_dir, "ORGANIZATION_REPORT.md")
-        report_content = ""
-        if os.path.exists(report_path):
-            with open(report_path, "r", encoding="utf-8") as f:
-                report_content = f.read()
+        # Wait for the worker to complete processing (with a 5-minute timeout)
+        await asyncio.wait_for(event.wait(), timeout=300.0)
+
+        # Retrieve result
+        result_data = task_results.get(task_id)
+        if not result_data:
+            raise HTTPException(
+                status_code=500, detail="Task finished but no result was recorded."
+            )
+
+        if result_data.get("status") == "error":
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": result_data.get(
+                        "error", "An error occurred during worker execution."
+                    ),
+                    "trace": result_data.get("trace", ""),
+                },
+            )
+
+        # If this is a cloud run/upload session, package the organized results
+        import re as re_mod
+
+        match = re_mod.search(r"neaty_run_([a-f0-9\-]+)", source_dir)
+        if match:
+            session_id = match.group(1)
+            session_dir = f"/tmp/neaty_run_{session_id}"
+            zip_path = os.path.join(session_dir, "organized.zip")
+
+            # Zip up destination_dir contents
+            import zipfile
+
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                for root, _, files in os.walk(destination_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        if file_path == zip_path:
+                            continue
+                        rel_path = os.path.relpath(file_path, destination_dir)
+                        zip_file.write(file_path, rel_path)
+
+            result_data["download_url"] = f"/api/download/{session_id}"
+
+        return result_data
+
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504, detail="Task processing timed out on the Pub/Sub worker."
+        )
+    finally:
+        # Clean up global task maps to prevent memory leaks
+        pending_tasks.pop(task_id, None)
+        task_results.pop(task_id, None)
+
+
+@app.get("/api/tasks/{task_id}")
+def get_task_status(task_id: str):
+    from pubsub_manager import pending_tasks, task_results
+
+    if task_id in pending_tasks:
+        return {"status": "working", "task_id": task_id}
+    elif task_id in task_results:
+        return task_results[task_id]
+    else:
+        raise HTTPException(
+            status_code=404, detail="Task not found or already cleaned up."
+        )
+
+
+@app.post("/api/upload")
+async def upload_zip(file: UploadFile = File(...)):
+    import zipfile
+    import uuid
+    import shutil
+
+    if not file.filename.endswith(".zip"):
+        raise HTTPException(
+            status_code=400, detail="Only .zip archive uploads are supported."
+        )
+
+    session_id = str(uuid.uuid4())
+    session_dir = f"/tmp/neaty_run_{session_id}"
+    os.makedirs(session_dir, exist_ok=True)
+
+    zip_path = os.path.join(session_dir, "upload.zip")
+    source_dir = os.path.join(session_dir, "source")
+    destination_dir = os.path.join(session_dir, "organized")
+
+    os.makedirs(source_dir, exist_ok=True)
+    os.makedirs(destination_dir, exist_ok=True)
+
+    try:
+        with open(zip_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            for member in zip_ref.namelist():
+                filename = os.path.basename(member)
+                if not filename:
+                    continue
+                target_path = os.path.abspath(os.path.join(source_dir, member))
+                if not target_path.startswith(os.path.abspath(source_dir)):
+                    continue
+                os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                with zip_ref.open(member) as source, open(target_path, "wb") as target:
+                    shutil.copyfileobj(source, target)
+
+        from neaty_agent import scan_directory_node
+        from neaty_agent import WorkflowInput
+
+        input_data = WorkflowInput(
+            source_dir=source_dir, destination_dir=destination_dir
+        )
+        scan_res = scan_directory_node(input_data)
 
         return {
             "status": "success",
-            "message": "Files organized successfully!",
+            "session_id": session_id,
+            "source_dir": source_dir,
             "destination_dir": destination_dir,
-            "report": report_content,
-            "result_summary": str(result),
+            "files": [f.model_dump() for f in scan_res.files],
         }
     except Exception as e:
-        import traceback
+        shutil.rmtree(session_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"Failed to process zip file: {e}")
 
-        error_trace = traceback.format_exc()
-        # Clean the trace for API response
+
+@app.get("/api/download/{session_id}")
+def download_zip(session_id: str):
+    zip_path = f"/tmp/neaty_run_{session_id}/organized.zip"
+    if not os.path.exists(zip_path):
         raise HTTPException(
-            status_code=500, detail={"error": str(e), "trace": error_trace}
+            status_code=404, detail="Organized zip archive not found or expired."
         )
+    return FileResponse(
+        path=zip_path,
+        filename="neaty_organized_files.zip",
+        media_type="application/zip",
+    )
 
 
 # Serve static frontend files
@@ -205,4 +342,6 @@ if os.path.exists(os.path.join(os.path.dirname(__file__), "static")):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("web_server:app", host="127.0.0.1", port=5050, reload=True)
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "5050"))
+    uvicorn.run("web_server:app", host=host, port=port, reload=True)

@@ -35,6 +35,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const reportMdBody = document.getElementById("report-md-body");
     const btnViewFolder = document.getElementById("btn-view-folder");
 
+    // Mode Selector Elements
+    const modeBtnLocal = document.getElementById("mode-btn-local");
+    const modeBtnCloud = document.getElementById("mode-btn-cloud");
+    const localControls = document.getElementById("local-controls");
+    const cloudControls = document.getElementById("cloud-controls");
+
+    // Cloud Mode Elements
+    const uploadZone = document.getElementById("upload-zone");
+    const inputCloudFile = document.getElementById("input-cloud-file");
+    const uploadProgressContainer = document.getElementById("upload-progress-container");
+    const uploadProgressBar = document.getElementById("upload-progress-bar");
+    const uploadStatusLbl = document.getElementById("upload-status-lbl");
+    const uploadPercentLbl = document.getElementById("upload-percent-lbl");
+    const btnCloudOrganize = document.getElementById("btn-cloud-organize");
+    const cloudOrganizeSpinner = document.getElementById("cloud-organize-spinner");
+    const btnDownloadZip = document.getElementById("btn-download-zip");
+
+    let currentSourcePath = "";
+    let currentDestPath = "";
+    let cloudSession = null; // { session_id, source_dir, destination_dir }
+
     // Modal Subtabs
     const subtabBtnGcp = document.getElementById("subtab-btn-gcp");
     const subtabBtnApi = document.getElementById("subtab-btn-api");
@@ -42,9 +63,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const subtabGcpContent = document.getElementById("subtab-gcp-content");
     const subtabApiContent = document.getElementById("subtab-api-content");
     const subtabProxyContent = document.getElementById("subtab-proxy-content");
-
-    let currentSourcePath = "";
-    let currentDestPath = "";
 
     // 1. ENVIRONMENT CONFIGURATION LOGIC
     // Load config from backend
@@ -231,6 +249,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
             reportEmpty.classList.add("hidden");
             reportContainer.classList.remove("hidden");
+
+            // Ensure proper action buttons are shown/hidden for local mode
+            btnViewFolder.classList.remove("hidden");
+            btnDownloadZip.classList.add("hidden");
             
             // Enable Report Tab
             tabBtnReport.classList.remove("disabled");
@@ -261,6 +283,246 @@ document.addEventListener("DOMContentLoaded", () => {
             btnOrganize.disabled = false;
             btnScan.disabled = false;
             organizeSpinner.classList.add("hidden");
+        }
+    });
+
+    // 3.5 MODE SWITCHING AND CLOUD INTEGRATION
+    function switchMode(mode) {
+        if (mode === "local") {
+            modeBtnLocal.classList.add("active");
+            modeBtnCloud.classList.remove("active");
+            localControls.classList.add("active");
+            cloudControls.classList.remove("active");
+        } else {
+            modeBtnLocal.classList.remove("active");
+            modeBtnCloud.classList.add("active");
+            localControls.classList.remove("active");
+            cloudControls.classList.add("active");
+        }
+    }
+
+    modeBtnLocal.addEventListener("click", () => switchMode("local"));
+    modeBtnCloud.addEventListener("click", () => switchMode("cloud"));
+
+    // Check if hosted on cloud or localhost
+    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    if (!isLocal) {
+        switchMode("cloud");
+    } else {
+        switchMode("local");
+    }
+
+    // Drag and drop event handling
+    uploadZone.addEventListener("click", () => {
+        inputCloudFile.click();
+    });
+
+    inputCloudFile.addEventListener("change", (e) => {
+        if (e.target.files.length > 0) {
+            handleZipUpload(e.target.files[0]);
+        }
+    });
+
+    ["dragenter", "dragover"].forEach(eventName => {
+        uploadZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadZone.classList.add("dragover");
+        }, false);
+    });
+
+    ["dragleave", "drop"].forEach(eventName => {
+        uploadZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadZone.classList.remove("dragover");
+        }, false);
+    });
+
+    uploadZone.addEventListener("drop", (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.name.endsWith(".zip")) {
+                handleZipUpload(file);
+            } else {
+                showStatus("Unsupported File", "Only .zip archives are supported.", "error");
+            }
+        }
+    });
+
+    function handleZipUpload(file) {
+        if (!file.name.endsWith(".zip")) {
+            showStatus("Unsupported File", "Please upload a valid .zip file.", "error");
+            return;
+        }
+
+        // Show progress elements
+        uploadProgressContainer.classList.remove("hidden");
+        uploadProgressBar.style.width = "0%";
+        uploadPercentLbl.textContent = "0%";
+        uploadStatusLbl.textContent = "Uploading zip archive...";
+        
+        btnCloudOrganize.disabled = true;
+        btnCloudOrganize.classList.add("disabled");
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/upload", true);
+
+        // Upload progress listener
+        xhr.upload.addEventListener("progress", (e) => {
+            if (e.lengthComputable) {
+                const percentComplete = Math.round((e.loaded / e.total) * 100);
+                uploadProgressBar.style.width = percentComplete + "%";
+                uploadPercentLbl.textContent = percentComplete + "%";
+                if (percentComplete === 100) {
+                    uploadStatusLbl.textContent = "Processing and scanning ZIP...";
+                }
+            }
+        });
+
+        // Request complete listener
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.status === "success") {
+                        cloudSession = {
+                            session_id: data.session_id,
+                            source_dir: data.source_dir,
+                            destination_dir: data.destination_dir
+                        };
+
+                        currentSourcePath = data.source_dir;
+                        currentDestPath = data.destination_dir;
+
+                        // Render Preview Table
+                        renderFilesTable(data.files);
+                        badgeFileCount.textContent = `${data.files.length} File(s) Detected`;
+                        badgeSourcePath.textContent = "Uploaded ZIP";
+
+                        previewEmpty.classList.add("hidden");
+                        previewContainer.classList.remove("hidden");
+
+                        // Unlock organize button
+                        btnCloudOrganize.classList.remove("disabled");
+                        btnCloudOrganize.disabled = false;
+                        
+                        // Switch tab to preview
+                        tabBtnPreview.click();
+
+                        uploadStatusLbl.textContent = "Upload complete!";
+                        showStatus("Upload Successful", `ZIP archive extracted and ${data.files.length} file(s) scanned.`, "success");
+                    } else {
+                        throw new Error(data.detail || "Processing failed.");
+                    }
+                } catch (err) {
+                    uploadStatusLbl.textContent = "Processing failed.";
+                    showStatus("Upload Processing Failed", err.message, "error");
+                }
+            } else {
+                let errorMsg = "Upload failed.";
+                try {
+                    const errData = JSON.parse(xhr.responseText);
+                    errorMsg = errData.detail || errorMsg;
+                } catch(e) {}
+                uploadStatusLbl.textContent = "Upload failed.";
+                showStatus("Upload Failed", errorMsg, "error");
+            }
+        };
+
+        xhr.onerror = function() {
+            uploadStatusLbl.textContent = "Connection error.";
+            showStatus("Network Error", "Unable to upload ZIP. Connection lost.", "error");
+        };
+
+        xhr.send(formData);
+    }
+
+    btnCloudOrganize.addEventListener("click", async () => {
+        if (!cloudSession) {
+            showStatus("No Session", "Please upload a ZIP file first.", "error");
+            return;
+        }
+
+        btnCloudOrganize.disabled = true;
+        cloudOrganizeSpinner.classList.remove("hidden");
+        showStatus("Organizing Files...", "Running ADK Graph workflow inside cloud session...", "working");
+
+        try {
+            const res = await fetch("/api/organize", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    source_dir: cloudSession.source_dir,
+                    destination_dir: cloudSession.destination_dir
+                })
+            });
+
+            if (!res.ok) {
+                const errData = await res.json();
+                throw errData.detail || { error: "Organization request failed." };
+            }
+
+            const data = await res.json();
+
+            // Render Report
+            renderReport(data.report);
+
+            reportEmpty.classList.add("hidden");
+            reportContainer.classList.remove("hidden");
+
+            // Setup buttons in report header
+            btnViewFolder.classList.add("hidden");
+            btnDownloadZip.classList.remove("hidden");
+
+            // Attach download URL
+            if (data.download_url) {
+                cloudSession.download_url = data.download_url;
+            } else {
+                cloudSession.download_url = `/api/download/${cloudSession.session_id}`;
+            }
+
+            // Enable Report Tab
+            tabBtnReport.classList.remove("disabled");
+            tabBtnReport.disabled = false;
+            tabBtnReport.click();
+
+            showStatus("Organization Success!", "Download organized ZIP from the report view!", "success");
+        } catch (err) {
+            let errMsg = "An unknown error occurred during execution.";
+            let errTrace = "";
+
+            if (typeof err === "string") errMsg = err;
+            else if (err.error) {
+                errMsg = err.error;
+                errTrace = err.trace || "";
+            }
+
+            // Render detailed error report inside the report container
+            renderErrorReport(errMsg, errTrace);
+            reportEmpty.classList.add("hidden");
+            reportContainer.classList.remove("hidden");
+            tabBtnReport.classList.remove("disabled");
+            tabBtnReport.disabled = false;
+            tabBtnReport.click();
+
+            showStatus("Workflow Run Failed", errMsg, "error");
+        } finally {
+            btnCloudOrganize.disabled = false;
+            cloudOrganizeSpinner.classList.add("hidden");
+        }
+    });
+
+    btnDownloadZip.addEventListener("click", () => {
+        if (cloudSession && cloudSession.download_url) {
+            window.location.href = cloudSession.download_url;
+        } else {
+            showStatus("Download Error", "No download link found for this session.", "error");
         }
     });
 

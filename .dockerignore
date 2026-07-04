@@ -1,0 +1,29 @@
+# Ignore python cache and build files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Ignore local virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Ignore git and agent configs
+.git/
+.gitignore
+.agents/
+.adk/
+
+# Ignore local config secrets and reports
+.env
+*.log
+organized_output/
+
+# Ignore developmental or experimental skills and evaluations
+# my-skill/
+eval_set_1.evalset.json

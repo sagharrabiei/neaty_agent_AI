@@ -7,10 +7,14 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 # Import ADK 2.0 core modules
+import pathlib
 from google.adk.agents import Agent
 from google.adk import Workflow, Event
 from google.adk.runners import InMemoryRunner
 from google.adk.apps import App
+from google.adk.skills import load_skill_from_dir
+from google.adk.tools.skill_toolset import SkillToolset
+from hooks import security_before_tool_callback
 
 # Load local environment variables from the current directory
 load_dotenv()
@@ -177,14 +181,23 @@ def scan_directory_node(node_input: WorkflowInput) -> ScanResult:
 # 3. Node 2: Categorizer & Naming Agent (LLM Node)
 # ==========================================
 
+# Load the local file categorization and organization skill
+SKILLS_DIR = pathlib.Path(__file__).parent / "my-skill"
+my_skill = load_skill_from_dir(SKILLS_DIR)
+my_skill_toolset = SkillToolset(skills=[my_skill])
+
 categorizer_agent = Agent(
     name="neaty_categorizer",
     model="gemini-2.5-flash",
     input_schema=ScanResult,
     output_schema=CategorizationResult,
+    tools=[my_skill_toolset],
+    before_tool_callback=security_before_tool_callback,
     instruction="""
     You are an expert filing assistant and librarian.
     Your task is to analyze the list of files provided in the ScanResult and organize them into neat, logical categories.
+    
+    You have access to a specialized skill tool named `my-skill` which contains the latest file organization guidelines and naming rules. Always refer to this skill to guide your classification decisions and directory naming.
     
     Guidelines:
     1. Group the files based on a blend of their file format, contents, and subject.

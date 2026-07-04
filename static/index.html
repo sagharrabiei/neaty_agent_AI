@@ -35,32 +35,80 @@
         <main class="main-layout">
             <!-- LEFT PANEL: CONTROLS & SCAN -->
             <section class="control-panel glass-card">
-                <div class="panel-header">
-                    <h2>📁 Organize Local Directory</h2>
-                    <p>Enter a local directory path to let Neaty scan and structure it.</p>
+                <!-- Mode Selector Segment -->
+                <div class="mode-selector">
+                    <button class="mode-tab active" id="mode-btn-local">
+                        <span class="icon">💻</span> Local Folder
+                    </button>
+                    <button class="mode-tab" id="mode-btn-cloud">
+                        <span class="icon">☁️</span> Cloud Upload
+                    </button>
                 </div>
 
-                <div class="input-group">
-                    <label for="input-source-dir">Source Directory Path</label>
-                    <div class="path-input-container">
-                        <input type="text" id="input-source-dir" placeholder="C:\Users\Username\Desktop\folder_to_organize" value="C:\Users\SAGHAR\Desktop\for_organize">
+                <!-- LOCAL MODE CONTROLS -->
+                <div id="local-controls" class="mode-section active">
+                    <div class="panel-header">
+                        <h2>📁 Local Directory Path</h2>
+                        <p>Enter a local directory path to let Neaty scan and structure it.</p>
+                    </div>
+
+                    <div class="input-group" style="margin-top: 1rem;">
+                        <label for="input-source-dir">Source Directory Path</label>
+                        <div class="path-input-container">
+                            <input type="text" id="input-source-dir" placeholder="C:\Users\Username\Desktop\folder_to_organize" value="C:\Users\SAGHAR\Desktop\for_organize">
+                        </div>
+                    </div>
+
+                    <div class="input-group" style="margin-top: 1rem;">
+                        <label for="input-dest-dir">Destination Directory (Optional)</label>
+                        <input type="text" id="input-dest-dir" placeholder="Defaults to 'organized_output' inside source folder">
+                    </div>
+
+                    <div class="action-buttons" style="margin-top: 1.5rem;">
+                        <button id="btn-scan" class="primary-btn cyan-glow">
+                            <span class="btn-spinner hidden" id="scan-spinner"></span>
+                            <span class="icon">🔍</span> Scan Folder
+                        </button>
+                        <button id="btn-organize" class="primary-btn purple-glow disabled" disabled>
+                            <span class="btn-spinner hidden" id="organize-spinner"></span>
+                            <span class="icon">🚀</span> Organize Files
+                        </button>
                     </div>
                 </div>
 
-                <div class="input-group">
-                    <label for="input-dest-dir">Destination Directory (Optional)</label>
-                    <input type="text" id="input-dest-dir" placeholder="Defaults to 'organized_output' inside source folder">
-                </div>
+                <!-- CLOUD MODE CONTROLS -->
+                <div id="cloud-controls" class="mode-section">
+                    <div class="panel-header">
+                        <h2>📤 Zip Archive Upload</h2>
+                        <p>Upload a .zip archive of files to organize them in the cloud.</p>
+                    </div>
 
-                <div class="action-buttons">
-                    <button id="btn-scan" class="primary-btn cyan-glow">
-                        <span class="btn-spinner hidden" id="scan-spinner"></span>
-                        <span class="icon">🔍</span> Scan Folder
-                    </button>
-                    <button id="btn-organize" class="primary-btn purple-glow disabled" disabled>
-                        <span class="btn-spinner hidden" id="organize-spinner"></span>
-                        <span class="icon">🚀</span> Organize Files
-                    </button>
+                    <div class="upload-zone" id="upload-zone">
+                        <input type="file" id="input-cloud-file" accept=".zip" style="display: none;">
+                        <div class="upload-zone-content">
+                            <div class="upload-icon">📦</div>
+                            <h3>Drag & drop your ZIP here</h3>
+                            <p>or click to browse your computer</p>
+                            <span class="upload-limit-info">ZIP archives up to 50MB</span>
+                        </div>
+                    </div>
+
+                    <div id="upload-progress-container" class="progress-container hidden">
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar" id="upload-progress-bar"></div>
+                        </div>
+                        <div class="progress-labels">
+                            <span id="upload-status-lbl">Uploading...</span>
+                            <span id="upload-percent-lbl">0%</span>
+                        </div>
+                    </div>
+
+                    <div class="action-buttons" style="margin-top: 1.5rem;">
+                        <button id="btn-cloud-organize" class="primary-btn purple-glow disabled" disabled style="grid-column: span 2;">
+                            <span class="btn-spinner hidden" id="cloud-organize-spinner"></span>
+                            <span class="icon">🚀</span> Organize Uploaded Files
+                        </button>
+                    </div>
                 </div>
 
                 <div class="status-box hidden" id="status-card">
@@ -118,7 +166,12 @@
                     <div class="report-container hidden" id="report-container">
                         <div class="report-header">
                             <h3>✨ Organization Complete</h3>
-                            <button id="btn-view-folder" class="flat-btn">Open Output Folder</button>
+                            <div class="report-header-buttons" style="display: flex; gap: 0.5rem;">
+                                <button id="btn-view-folder" class="flat-btn">Open Output Folder</button>
+                                <button id="btn-download-zip" class="flat-btn hidden" style="color: var(--accent-green); background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3);">
+                                    <span class="icon">📥</span> Download Organized ZIP
+                                </button>
+                            </div>
                         </div>
                         <div class="report-body markdown-styled" id="report-md-body">
                             <!-- Dynamic Report Markdown converted to HTML -->
