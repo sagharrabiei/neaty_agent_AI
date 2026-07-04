@@ -33,7 +33,7 @@ Neaty is engineered from the ground up with a **Zero-Trust, Security-First Archi
 
 Neaty is designed as a structured, deterministic state machine wrapped around a Gemini-powered categorizer agent. The workflow coordinates three sequential nodes to guarantee predictable execution:
 
-```mermaid
+```
 graph TD
     START([START]) --> SCAN_NODE[1. Scan Directory Node]
     SCAN_NODE --> CATEGORIZER[2. Categorizer LLM Agent]
